@@ -37,6 +37,12 @@ export default function StickmanWesternAnimation({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   
+  // High-fidelity references to eliminate stale closures in older frame ticks
+  const onFinishedRef = useRef(onFinishedAnimation);
+  useEffect(() => {
+    onFinishedRef.current = onFinishedAnimation;
+  }, [onFinishedAnimation]);
+  
   // Simulation states
   const [demoState, setDemoState] = useState<'idle' | 'running' | 'completed'>('idle');
   const [simulatedComplete, setSimulatedComplete] = useState(false);
@@ -849,12 +855,12 @@ export default function StickmanWesternAnimation({
             spawnSparkCascade(state.cowboyFallX, horizonY, 8, colors.textWhite);
             state.cowboyFallAngle = Math.PI * 0.45; // resting state flat
             
-            // Finish animation trigger timeout
+            // Finish animation trigger timeout using safe reference callback
             if (!state.onFinishedTriggered) {
               state.onFinishedTriggered = true;
               setTimeout(() => {
                 cancelAnimationFrame(state.frameId);
-                onFinishedAnimation?.();
+                onFinishedRef.current?.();
               }, 1200);
             }
           }

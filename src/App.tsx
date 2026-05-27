@@ -188,9 +188,13 @@ export default function App() {
     }
   };
 
-  // Trigger dynamic scans on tab focus or change
+  // Trigger dynamic scans on tab focus or change, and pre-fetch in background on mount
+  const initiatedPreFetch = React.useRef(false);
   useEffect(() => {
     if (activeMainTab === 4) {
+      triggerRadarScan(category);
+    } else if (!initiatedPreFetch.current) {
+      initiatedPreFetch.current = true;
       triggerRadarScan(category);
     }
   }, [category, activeMainTab]);

@@ -170,10 +170,11 @@ function parseIdeasFromN8N(data: any): IdeaItem[] {
   return [];
 }
 
-// Rolling Screendaily headlines ticker styled elegantly with sliding transition
+// Rolling Screendaily headlines ticker styled elegantly with sliding transition containing summaries
 function ScreendailyTicker() {
-  const [headlines, setHeadlines] = useState<{ title: string; url: string }[]>([]);
+  const [headlines, setHeadlines] = useState<{ title: string; url: string; summary?: string }[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/screendaily-headlines")
@@ -182,9 +183,11 @@ function ScreendailyTicker() {
         if (Array.isArray(data) && data.length > 0) {
           setHeadlines(data);
         }
+        setLoading(false);
       })
       .catch(err => {
         console.error("Error fetching rolling headlines:", err);
+        setLoading(false);
       });
   }, []);
 
@@ -192,35 +195,77 @@ function ScreendailyTicker() {
     if (headlines.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentIndex(prev => (prev + 1) % headlines.length);
-    }, 4000);
+    }, 10000); // 10 seconds display interval as requested
     return () => clearInterval(timer);
   }, [headlines]);
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-2xl mt-8 p-6 bg-black/40 border border-white/5 rounded flex flex-col items-center justify-center font-mono animate-pulse">
+        <div className="flex items-center gap-3 text-xs tracking-widest text-white/40 uppercase">
+          <span className="w-2 h-2 bg-zita-primary rounded-full animate-ping"></span>
+          Pre-heating background news connections...
+        </div>
+      </div>
+    );
+  }
 
   if (headlines.length === 0) return null;
 
   const current = headlines[currentIndex];
 
   return (
-    <div className="w-full max-w-xl mt-4 h-12 relative flex items-center justify-center overflow-hidden border-t border-white/5 pt-3">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -16, opacity: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute w-full flex justify-center px-4"
-        >
-          <a
-            href={current.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] md:text-xs font-sans text-neutral-400 hover:text-white transition-all text-center truncate block max-w-full font-light filter drop-shadow-sm tracking-wide"
+    <div className="w-full max-w-2xl mt-8 p-6 bg-neutral-950/60 border border-zita-primary/20 hover:border-zita-primary/50 text-left rounded shadow-2xl transition-all select-text relative overflow-hidden backdrop-blur-sm">
+      <div className="absolute top-0 left-0 w-1.5 h-full bg-zita-primary"></div>
+      
+      {/* Top indicator tag */}
+      <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2 font-mono">
+        <span className="text-[10px] uppercase tracking-[0.25em] text-zita-primary font-bold flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          Live Newsroom Bulletin
+        </span>
+        <span className="text-[9px] uppercase tracking-wider text-white/30 font-medium">
+          Automated Dispatch
+        </span>
+      </div>
+
+      <div className="h-[105px] md:h-[90px] relative overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentIndex}
+            initial={{ x: 20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -20, opacity: 0 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute inset-x-0 top-0 flex flex-col justify-start"
           >
-            {current.title}
-          </a>
-        </motion.div>
-      </AnimatePresence>
+            <a
+              href={current.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-base md:text-lg font-sans text-white hover:text-zita-primary transition-colors block font-extrabold tracking-wide leading-snug cursor-pointer mb-2 decoration-zita-primary/30 hover:underline"
+            >
+              {current.title}
+            </a>
+            <p className="text-xs text-neutral-400 font-light leading-relaxed italic line-clamp-2">
+              {current.summary || "Expanding coverage across major European film festivals and local arthouse networks."}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Pagination bullets */}
+      <div className="flex justify-start gap-1 pb-1 mt-3 border-t border-white/5 pt-3 select-none">
+        {headlines.slice(0, 8).map((_, idx) => (
+          <button
+            key={idx}
+            onClick={() => setCurrentIndex(idx)}
+            className={`w-1.5 h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+              idx === currentIndex ? 'scale-125 bg-zita-primary w-4' : 'bg-white/10 hover:bg-white/30'
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -284,6 +329,12 @@ export default function ProgrammingTab({
     isInitializedState?: boolean;
     errorMsg?: string;
   } | null>(null);
+
+  // Eliminate React hook closure bugs in asynchronous transitions via refs
+  const latestPendingResultRef = useRef(pendingIdeasResult);
+  useEffect(() => {
+    latestPendingResultRef.current = pendingIdeasResult;
+  }, [pendingIdeasResult]);
   
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -298,7 +349,8 @@ export default function ProgrammingTab({
   }, [history]);
 
   const handleAnimationEndSequence = () => {
-    if (!pendingIdeasResult) {
+    const freshResult = latestPendingResultRef.current;
+    if (!freshResult) {
       setIsLoading(false);
       setAnimationComplete(false);
       setIsFadingOut(false);
@@ -309,7 +361,7 @@ export default function ProgrammingTab({
     setIsFadingOut(true);
 
     setTimeout(() => {
-      const { success, ideas, message, id, isInitializedState, errorMsg } = pendingIdeasResult;
+      const { success, ideas, message, id, isInitializedState, errorMsg } = freshResult;
 
       if (success) {
         onUnlockMarketing(ideas);
@@ -473,7 +525,7 @@ export default function ProgrammingTab({
       
       {/* Intro Hero Section (Visible only when not initialized) */}
       {!isInitialized && (
-        <div id="hero-section" className="flex flex-col items-center justify-center min-h-[350px] relative w-full text-center">
+        <div id="hero-section" className="flex flex-col items-center justify-center min-h-[450px] relative w-full text-center py-6">
           
           {(isLoading || isFadingOut) ? (
             <div className={`w-full max-w-2xl px-4 flex flex-col items-center gap-4 transition-opacity duration-1000 ease-in-out ${
@@ -491,31 +543,29 @@ export default function ProgrammingTab({
               <h1 id="main-headline" className="font-serif text-5xl md:text-[96px] text-zita-primary drop-shadow-[0_0_15px_rgba(229,9,20,0.3)] transition-all uppercase tracking-normal">
                 FOLKETS BIO AI ASSISTANT
               </h1>
-            </>
-          )}
 
-          {!isLoading && (
-            <div className="flex flex-col items-center justify-center w-full mt-24 transition-all duration-500" id="action-area">
-              <div className="w-full max-w-xl relative group" id="action-container">
-                <button
-                  id="action-button"
-                  onClick={() => callProgAgent()}
-                  className="w-full bg-zita-primary text-white py-6 px-8 border border-zita-primary font-mono text-xs md:text-sm uppercase tracking-[0.35em] md:tracking-[0.45em] hover:bg-neutral-900 hover:text-zita-primary hover:border-zita-primary transition-all duration-300 shadow-[0_0_20px_rgba(229,9,20,0.15)] flex items-center justify-center gap-4 cursor-pointer"
-                >
-                  <Zap className="w-4 h-4 fill-current animate-pulse" />
-                  BRAINSTORM PROGRAMMING IDEAS
-                </button>
-              </div>
-
-              {errorMessage && (
-                <div className="mt-8 text-zita-primary max-w-xl text-center border border-zita-primary/20 bg-zita-primary/5 p-6 rounded text-xs leading-relaxed animate-fade-in font-mono tracking-wider">
-                  <p className="font-extrabold uppercase mb-2">Notice</p>
-                  <p className="text-white/75">{errorMessage}</p>
+              <div className="flex flex-col items-center justify-center w-full mt-16 transition-all duration-500" id="action-area">
+                <div className="w-full max-w-xl relative group" id="action-container">
+                  <button
+                    id="action-button"
+                    onClick={() => callProgAgent()}
+                    className="w-full bg-zita-primary text-white py-6 px-8 border border-zita-primary font-mono text-xs md:text-sm uppercase tracking-[0.35em] md:tracking-[0.45em] hover:bg-neutral-900 hover:text-zita-primary hover:border-zita-primary transition-all duration-300 shadow-[0_0_20px_rgba(229,9,20,0.15)] flex items-center justify-center gap-4 cursor-pointer"
+                  >
+                    <Zap className="w-4 h-4 fill-current animate-pulse" />
+                    BRAINSTORM PROGRAMMING IDEAS
+                  </button>
                 </div>
-              )}
 
+                {errorMessage && (
+                  <div className="mt-8 text-zita-primary max-w-xl text-center border border-zita-primary/20 bg-zita-primary/5 p-6 rounded text-xs leading-relaxed animate-fade-in font-mono tracking-wider">
+                    <p className="font-extrabold uppercase mb-2">Notice</p>
+                    <p className="text-white/75">{errorMessage}</p>
+                  </div>
+                )}
 
-            </div>
+                <ScreendailyTicker />
+              </div>
+            </>
           )}
         </div>
       )}
