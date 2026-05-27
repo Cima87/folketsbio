@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Send, Zap, Film, CornerDownRight } from 'lucide-react';
+import StickmanWesternAnimation from './StickmanWesternAnimation';
 
 interface FilmRec {
   title: string;
@@ -10,8 +11,8 @@ interface FilmRec {
 
 interface IdeaItem {
   event_title: string;
-  marketing_hook: string;
   concept_summary: string;
+  marketing_hook: string;
   film_recommendations: FilmRec[];
   reasoning: string;
 }
@@ -85,6 +86,19 @@ export default function ProgrammingTab({
   const [isLoading, setIsLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Coordinating states for the stickman animation
+  const [showDemoSandbox, setShowDemoSandbox] = useState(false);
+  const [animationComplete, setAnimationComplete] = useState(false);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+  const [pendingIdeasResult, setPendingIdeasResult] = useState<{
+    success: boolean;
+    id?: string;
+    ideas: IdeaItem[];
+    message: string;
+    isInitializedState?: boolean;
+    errorMsg?: string;
+  } | null>(null);
   
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -98,6 +112,57 @@ export default function ProgrammingTab({
     saveHistoryRef.current(history);
   }, [history]);
 
+  const handleAnimationEndSequence = () => {
+    if (!pendingIdeasResult) {
+      setIsLoading(false);
+      setAnimationComplete(false);
+      setIsFadingOut(false);
+      return;
+    }
+
+    // Set fading out state to initiate the CSS opacity transition
+    setIsFadingOut(true);
+
+    setTimeout(() => {
+      const { success, ideas, message, id, isInitializedState, errorMsg } = pendingIdeasResult;
+
+      if (success) {
+        onUnlockMarketing(ideas);
+        const newHistoryItem: ChatElement = {
+          id: id || ('element-' + Date.now()),
+          type: 'ideas',
+          ideas: ideas,
+          agentMessage: message || ""
+        };
+        setHistory(prev => [...prev, newHistoryItem]);
+        setIsInitialized(true);
+        updateStatus("PROGRAM READY", "online");
+      } else {
+        updateStatus("SYSTEM ERROR", "error");
+        if (isInitializedState) {
+          const newHistoryItem: ChatElement = {
+            id: id || ('element-' + Date.now()),
+            type: 'ideas',
+            ideas: [],
+            agentMessage: message || "No programming ideas were returned by the workflow. Please check your n8n webhook setup or trigger again with a revision."
+          };
+          setHistory(prev => [...prev, newHistoryItem]);
+        } else {
+          setErrorMessage(errorMsg || "No programming ideas were returned. Please check that your n8n workflow finished successfully.");
+        }
+      }
+
+      setIsLoading(false);
+      setPendingIdeasResult(null);
+      setAnimationComplete(false);
+      setIsFadingOut(false);
+
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }, 1000); // 1000ms transitions smoothly aligned with opacity
+  };
+
   const callProgAgent = async (promptText = "Generate 3 initial programming ideas.") => {
     const isFirstTime = !isInitialized;
     
@@ -109,6 +174,8 @@ export default function ProgrammingTab({
 
     setIsLoading(true);
     setErrorMessage(null);
+    setAnimationComplete(false);
+    setPendingIdeasResult(null);
 
     try {
       const response = await fetch(progWebhookUrl, {
@@ -143,40 +210,57 @@ export default function ProgrammingTab({
         }
       }
 
-      if (processedIdeas && processedIdeas.length > 0) {
-        onUnlockMarketing(processedIdeas);
-        
-        const newHistoryItem: ChatElement = {
-          id: 'element-' + Date.now(),
-          type: 'ideas',
-          ideas: processedIdeas,
-          agentMessage: processedMessage || ""
-        };
+      const hasIdeas = processedIdeas && processedIdeas.length > 0;
 
-        setHistory(prev => [...prev, newHistoryItem]);
-        setIsInitialized(true);
-        updateStatus("PROGRAM READY", "online");
+      if (isFirstTime) {
+        // Queue the result and fire the final shot. Once the cowboy falls, handleAnimationEndSequence is called.
+        setPendingIdeasResult({
+          success: hasIdeas,
+          id: 'element-' + Date.now(),
+          ideas: processedIdeas,
+          message: processedMessage,
+          isInitializedState: false,
+          errorMsg: hasIdeas ? undefined : "No programming ideas were returned. Please check that your n8n workflow finished successfully and returns the structured data containing ideas."
+        });
+        setAnimationComplete(true);
       } else {
-        console.warn("No programming ideas returned from the agent. Double-check n8n or inputs.");
-        updateStatus("SYSTEM ERROR", "error");
-        
-        if (isInitialized) {
+        // Immediate update for refinement flows
+        if (hasIdeas) {
+          onUnlockMarketing(processedIdeas);
+          const newHistoryItem: ChatElement = {
+            id: 'element-' + Date.now(),
+            type: 'ideas',
+            ideas: processedIdeas,
+            agentMessage: processedMessage || ""
+          };
+          setHistory(prev => [...prev, newHistoryItem]);
+          updateStatus("PROGRAM READY", "online");
+        } else {
+          updateStatus("SYSTEM ERROR", "error");
           const newHistoryItem: ChatElement = {
             id: 'element-' + Date.now(),
             type: 'ideas',
             ideas: [],
-            agentMessage: processedMessage || "No programming ideas were returned by the workflow. Please check your n8n webhook setup or trigger again with a revision."
+            agentMessage: "No programming ideas were returned by the workflow. Please check your n8n webhook setup."
           };
           setHistory(prev => [...prev, newHistoryItem]);
-        } else {
-          setErrorMessage("No programming ideas were returned. Please check that your n8n workflow finished successfully and returns the structured data containing ideas.");
         }
+        setIsLoading(false);
       }
     } catch (error) {
       console.error(error);
       updateStatus("SYSTEM ERROR", "error");
-      if (!isInitialized) {
-        setErrorMessage("Connection or server failure communicating with your n8n workflow. Please ensure your n8n workflow is active, functional, and that CORS is allowed.");
+
+      if (isFirstTime) {
+        // Queue error result so the cowboy gets hit, then the error details are rendered!
+        setPendingIdeasResult({
+          success: false,
+          ideas: [],
+          message: "",
+          isInitializedState: false,
+          errorMsg: "Connection or server failure communicating with your n8n workflow. Please ensure your n8n workflow is active, functional, and that CORS is allowed."
+        });
+        setAnimationComplete(true);
       } else {
         const newHistoryItem: ChatElement = {
           id: 'element-error-' + Date.now(),
@@ -185,12 +269,14 @@ export default function ProgrammingTab({
           agentMessage: "Communication error: Failed to connect to the programming agent. Please retry."
         };
         setHistory(prev => [...prev, newHistoryItem]);
+        setIsLoading(false);
       }
     } finally {
-      setIsLoading(false);
-      setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      if (!isFirstTime) {
+        setTimeout(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
     }
   };
 
@@ -219,10 +305,15 @@ export default function ProgrammingTab({
       {!isInitialized && (
         <div id="hero-section" className="flex flex-col items-center justify-center min-h-[350px] relative w-full text-center">
           
-          {isLoading ? (
-            <div className="flex justify-center items-center gap-8 h-32 animate-fade-in">
-              <div className="w-12 h-12 rounded-full bg-zita-primary shadow-[0_0_40px_rgba(229,9,20,0.8)] bouncing-sphere relative after:absolute after:inset-0 after:rounded-full after:bg-white/20 after:blur-sm"></div>
-              <div className="w-12 h-12 rounded-full bg-zita-primary shadow-[0_0_40px_rgba(229,9,20,0.8)] bouncing-sphere relative after:absolute after:inset-0 after:rounded-full after:bg-white/20 after:blur-sm [animation-delay:0.15s]"></div>
+          {(isLoading || isFadingOut) ? (
+            <div className={`w-full max-w-2xl px-4 flex flex-col items-center gap-4 transition-opacity duration-1000 ease-in-out ${
+              isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}>
+              <StickmanWesternAnimation
+                isLoading={isLoading}
+                isComplete={animationComplete}
+                onFinishedAnimation={handleAnimationEndSequence}
+              />
             </div>
           ) : (
             <>
@@ -251,6 +342,8 @@ export default function ProgrammingTab({
                   <p className="text-white/75">{errorMessage}</p>
                 </div>
               )}
+
+
             </div>
           )}
         </div>
@@ -371,7 +464,7 @@ export default function ProgrammingTab({
 
           {/* Action Transition / Re-roll button */}
           {!isLoading && history.length > 0 && (
-            <div className="w-full flex justify-center mt-12 mb-24 anim-fade-in">
+            <div className="w-full flex flex-col items-center gap-8 mt-12 mb-24 anim-fade-in">
               <button
                 onClick={() => onSwitchTab(2)}
                 className="bg-white text-black hover:bg-neutral-200 font-mono font-bold py-5 px-8 text-xs uppercase tracking-[0.3em] transition-all duration-300 flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(255,255,255,0.2)] cursor-pointer"
@@ -379,6 +472,32 @@ export default function ProgrammingTab({
                 <Sparkles className="w-4 h-4 text-black animate-pulse" />
                 GENERATE / RE-ROLL MARKETING STRATEGY
               </button>
+
+              {/* Developer Sandbox for pre-visualization also visible in initialized state */}
+              <div className="mt-12 flex flex-col items-center w-full max-w-2xl select-none">
+                <button
+                  onClick={() => setShowDemoSandbox(!showDemoSandbox)}
+                  className="px-6 py-3 bg-neutral-900/50 hover:bg-neutral-900 border border-white/10 hover:border-zita-primary/10 hover:text-zita-primary text-white/40 transition-all duration-300 font-mono text-[10px] uppercase tracking-widest cursor-pointer rounded"
+                >
+                  {showDemoSandbox ? "hide stickman demo drawer" : "🎬 launch dynamic stickman chase pre-visualization simulation"}
+                </button>
+                
+                {showDemoSandbox && (
+                  <div className="mt-6 w-full p-6 border border-white/5 bg-black/80 rounded-lg animate-fade-in select-none text-left">
+                    <p className="font-serif text-lg text-zita-amber uppercase tracking-wider mb-2">
+                      80s Minimalist Vector Cinema Simulation Sandbox
+                    </p>
+                    <p className="text-[11px] font-sans text-white/50 mb-6 leading-relaxed">
+                      Below is a real-time pre-visualization simulation of the vector stickman cowboy and Indian chase sequence. You can manually fire arrows or Colt rounds, or trigger the fatal strike completion sequence right inside this interactive viewport.
+                    </p>
+                    <StickmanWesternAnimation
+                      isLoading={true}
+                      isComplete={false}
+                      interactiveDemo={true}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
