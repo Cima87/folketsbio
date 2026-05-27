@@ -33,7 +33,7 @@ interface MarketingTabProps {
   updateStatus: (text: string, state: 'ping' | 'online' | 'error') => void;
 }
 
-const mktWebhookUrl = 'https://cima87.app.n8n.cloud/webhook/zita-strategy-chat';
+const mktWebhookUrl = '/api/n8n-strategy-chat';
 
 export default function MarketingTab({
   approvedEvents,

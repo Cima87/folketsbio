@@ -633,7 +633,14 @@ app.get("/api/cine-radar", async (req, res) => {
 }`;
     }
 
-    const modelName = process.env.NEWS_ROOM_MODEL || "gemini-3.5-flash";
+    let modelName = process.env.NEWS_ROOM_MODEL || "gemini-3.5-flash";
+    if (modelName === "3.5-flash") {
+      modelName = "gemini-3.5-flash";
+    } else if (modelName === "3.1-pro-preview") {
+      modelName = "gemini-3.1-pro-preview";
+    } else if (!modelName.startsWith("gemini-") && !modelName.startsWith("models/")) {
+      modelName = `gemini-${modelName}`;
+    }
     console.log(`Using model: ${modelName} for CineRadar newsroom generation.`);
 
     const response = await ai.models.generateContent({
@@ -989,6 +996,100 @@ app.get("/api/screendaily-headlines", async (req, res) => {
       }
     ];
     return res.json(fallbackArticles);
+  }
+});
+
+// Proxy routes for n8n webhooks to bypass browser CORS constraints safely
+app.post("/api/n8n-trigger-agents", async (req, res) => {
+  try {
+    const response = await fetch("https://cima87.app.n8n.cloud/webhook/trigger-zita-agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+    if (!response.ok) {
+      throw new Error(`n8n agents trigger failed: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("n8n-trigger-agents proxy failed:", error);
+    return res.status(500).json({ error: error.message || "Proxy connection failure" });
+  }
+});
+
+app.post("/api/n8n-strategy-chat", async (req, res) => {
+  try {
+    const response = await fetch("https://cima87.app.n8n.cloud/webhook/zita-strategy-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+    if (!response.ok) {
+      throw new Error(`n8n strategy chat failed: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("n8n-strategy-chat proxy failed:", error);
+    return res.status(500).json({ error: error.message || "Proxy connection failure" });
+  }
+});
+
+app.post("/api/n8n-execute-visuals", async (req, res) => {
+  try {
+    const response = await fetch("https://cima87.app.n8n.cloud/webhook/zita-execute-visuals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+    if (!response.ok) {
+      throw new Error(`n8n execute visuals failed: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("n8n-execute-visuals proxy failed:", error);
+    return res.status(500).json({ error: error.message || "Proxy connection failure" });
+  }
+});
+
+app.post("/api/n8n-render-start", async (req, res) => {
+  try {
+    const response = await fetch("https://cima87.app.n8n.cloud/webhook/render-start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body)
+    });
+    if (!response.ok) {
+      throw new Error(`n8n render start failed: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("n8n-render-start proxy failed:", error);
+    return res.status(500).json({ error: error.message || "Proxy connection failure" });
+  }
+});
+
+app.get("/api/n8n-render-check", async (req, res) => {
+  try {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === "string") {
+        query.set(key, value);
+      }
+    }
+    const checkUrl = `https://cima87.app.n8n.cloud/webhook/render-check?${query.toString()}`;
+    const response = await fetch(checkUrl);
+    if (!response.ok) {
+      throw new Error(`n8n render check failed: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("n8n-render-check proxy failed:", error);
+    return res.status(500).json({ error: error.message || "Proxy connection failure" });
   }
 });
 

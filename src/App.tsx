@@ -57,13 +57,24 @@ export default function App() {
   });
 
   const [category, setCategory] = useState<Category>('news');
-  const [isLoading, setIsLoading] = useState(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);
-  const [newsItems, setNewsItems] = useState<any[]>([]);
-  const [summaryPitch, setSummaryPitch] = useState<string>("");
-  const [recommendations, setRecommendations] = useState<any[]>([]);
-  const [competitorScout, setCompetitorScout] = useState<any[]>([]);
+
+  // Category-specific store for seamless instant transitions without losing content
+  const [radarData, setRadarData] = useState<Record<Category, {
+    newsItems: any[];
+    summaryPitch: string;
+    recommendations: any[];
+    competitorScout: any[];
+    isLoaded: boolean;
+    isLoading: boolean;
+  }>>({
+    news: { newsItems: [], summaryPitch: "", recommendations: [], competitorScout: [], isLoaded: false, isLoading: false },
+    releases: { newsItems: [], summaryPitch: "", recommendations: [], competitorScout: [], isLoaded: false, isLoading: false },
+    festivals: { newsItems: [], summaryPitch: "", recommendations: [], competitorScout: [], isLoaded: false, isLoading: false },
+    curated: { newsItems: [], summaryPitch: "", recommendations: [], competitorScout: [], isLoaded: false, isLoading: false },
+  });
+
   const [tickerTime, setTickerTime] = useState("");
   const [activeSection, setActiveSection] = useState<'newsroom' | 'starred' | 'poster' | 'notebook'>('newsroom');
 
@@ -135,9 +146,18 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch News/Scan coordinates
-  const triggerRadarScan = async (cat: Category = category) => {
-    setIsLoading(true);
+  // Fetch News/Scan coordinates for a specific category
+  const triggerRadarScan = async (cat: Category = category, force = false) => {
+    // If not a force-refresh and this category's feed has already loaded, skip redundant fetching
+    if (!force && radarData[cat].isLoaded) {
+      return;
+    }
+
+    setRadarData(prev => ({
+      ...prev,
+      [cat]: { ...prev[cat], isLoading: true }
+    }));
+
     // Reset pagination state when hard refresh or category change occurs
     setHasLoadedMore(prev => ({ ...prev, [cat]: false }));
     try {
@@ -148,21 +168,23 @@ export default function App() {
       setIsQuotaExceeded(!!output.isQuotaExceeded);
       setIsApiKeyMissing(!!output.isApiKeyMissing);
       
-      if (cat === 'curated') {
-        setSummaryPitch(output.summaryPitch || "");
-        setRecommendations(output.recommendations || []);
-        setCompetitorScout(output.competitorScout || []);
-        setNewsItems([]);
-      } else {
-        setNewsItems(output.data || []);
-        setSummaryPitch("");
-        setRecommendations([]);
-        setCompetitorScout([]);
-      }
+      setRadarData(prev => ({
+        ...prev,
+        [cat]: {
+          newsItems: cat === 'curated' ? [] : (output.data || []),
+          summaryPitch: cat === 'curated' ? (output.summaryPitch || "") : "",
+          recommendations: cat === 'curated' ? (output.recommendations || []) : [],
+          competitorScout: cat === 'curated' ? (output.competitorScout || []) : [],
+          isLoaded: true,
+          isLoading: false
+        }
+      }));
     } catch (err) {
-      console.error("Scanning malfunction:", err);
-    } finally {
-      setIsLoading(false);
+      console.error(`Scanning malfunction for ${cat}:`, err);
+      setRadarData(prev => ({
+        ...prev,
+        [cat]: { ...prev[cat], isLoading: false }
+      }));
     }
   };
 
@@ -170,8 +192,10 @@ export default function App() {
   const handleLoadMore = async () => {
     if (isSearchingMore) return;
     setIsSearchingMore(true);
+    const cat = category;
+    const currentLength = radarData[cat].newsItems.length;
     try {
-      const url = `/api/cine-radar?category=${category}&loadMore=true&offset=${newsItems.length}&cinemaName=${encodeURIComponent(staticCinemaName)}&focusArea=${encodeURIComponent(staticFocusArea)}`;
+      const url = `/api/cine-radar?category=${cat}&loadMore=true&offset=${currentLength}&cinemaName=${encodeURIComponent(staticCinemaName)}&focusArea=${encodeURIComponent(staticFocusArea)}`;
       const res = await fetch(url);
       const output = await res.json();
       
@@ -179,8 +203,15 @@ export default function App() {
       setIsApiKeyMissing(!!output.isApiKeyMissing);
       
       if (output.data && Array.isArray(output.data)) {
-        setNewsItems(prev => [...prev, ...output.data]);
+        setRadarData(prev => ({
+          ...prev,
+          [cat]: {
+            ...prev[cat],
+            newsItems: [...prev[cat].newsItems, ...output.data]
+          }
+        }));
       }
+      setHasLoadedMore(prev => ({ ...prev, [cat]: true }));
     } catch (err) {
       console.error("Load more searching malfunction:", err);
     } finally {
@@ -188,13 +219,21 @@ export default function App() {
     }
   };
 
-  // Trigger dynamic scans on tab focus or change, and pre-fetch in background on mount
-  const initiatedPreFetch = React.useRef(false);
+  // Pre-fetch all News Room categories in the background sequentially on landing page mount
+  useEffect(() => {
+    const prefetch = async () => {
+      const categories: Category[] = ['news', 'releases', 'festivals', 'curated'];
+      for (const cat of categories) {
+        // Run sequentially to spread server request traffic nicely in the background
+        await triggerRadarScan(cat, false);
+      }
+    };
+    prefetch();
+  }, []);
+
+  // Sync current section tab state shifts
   useEffect(() => {
     if (activeMainTab === 4) {
-      triggerRadarScan(category);
-    } else if (!initiatedPreFetch.current) {
-      initiatedPreFetch.current = true;
       triggerRadarScan(category);
     }
   }, [category, activeMainTab]);
@@ -506,11 +545,11 @@ export default function App() {
                     <CineRadarWire
                       category={category}
                       onChangeCategory={setCategory}
-                      isLoading={isLoading}
-                      newsItems={newsItems}
-                      summaryPitch={summaryPitch}
-                      recommendations={recommendations}
-                      competitorScout={competitorScout}
+                      isLoading={radarData[category].isLoading}
+                      newsItems={radarData[category].newsItems}
+                      summaryPitch={radarData[category].summaryPitch}
+                      recommendations={radarData[category].recommendations}
+                      competitorScout={radarData[category].competitorScout}
                       onBookmarkFilm={handleBookmarkFilm}
                       bookmarkedIds={bookmarkedFilms.map(f => f.id)}
                       isQuotaExceeded={isQuotaExceeded}
@@ -531,11 +570,11 @@ export default function App() {
                         </span>
                       </div>
                       <button
-                        onClick={() => triggerRadarScan(category)}
-                        disabled={isLoading}
+                        onClick={() => triggerRadarScan(category, true)}
+                        disabled={radarData[category].isLoading}
                         className="text-xs px-5 py-2 font-serif uppercase tracking-wider text-white bg-zita-primary hover:bg-red-700 disabled:bg-zita-primary/50 transition cursor-pointer zita-btn rounded whitespace-nowrap"
                       >
-                        {isLoading ? "Querying networks..." : "Re-Scan Arthouse Feed"}
+                        {radarData[category].isLoading ? "Querying networks..." : "Re-Scan Arthouse Feed"}
                       </button>
                     </div>
                   </div>

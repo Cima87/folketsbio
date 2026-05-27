@@ -19,9 +19,9 @@ interface VisualsTabProps {
   updateStatus: (text: string, state: 'ping' | 'online' | 'error') => void;
 }
 
-const visualWebhookUrl = 'https://cima87.app.n8n.cloud/webhook/zita-execute-visuals';
-const renderStartUrl = 'https://cima87.app.n8n.cloud/webhook/render-start';
-const renderCheckUrl = 'https://cima87.app.n8n.cloud/webhook/render-check';
+const visualWebhookUrl = '/api/n8n-execute-visuals';
+const renderStartUrl = '/api/n8n-render-start';
+const renderCheckUrl = '/api/n8n-render-check';
 
 // Standalone component for managing individual poster render lifecycle and polling
 function PosterRenderer({ item, sessionId }: { item: VisualCampaignItem; sessionId: string; key?: React.Key }) {

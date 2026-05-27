@@ -270,7 +270,7 @@ function ScreendailyTicker() {
   );
 }
 
-const progWebhookUrl = 'https://cima87.app.n8n.cloud/webhook/trigger-zita-agents';
+const progWebhookUrl = '/api/n8n-trigger-agents';
 
 export default function ProgrammingTab({
   sessionId,
