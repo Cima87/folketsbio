@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Montserrat", sans-serif;
+  --font-serif: "Bebas Neue", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-zita-bg: #000000;
+  --color-zita-onbg: #e2e2e2;
+  --color-zita-primary: #e50914;
+  --color-zita-surface: #111111;
+  --color-zita-outline: #af8782;
+  --color-zita-amber: #d5913e;
+}
+
+@layer utilities {
+  .zita-grid {
+    background-color: #000000;
+    background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  
+  .glass {
+    background: rgba(17, 17, 17, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+  }
+
+  .zita-btn {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+    transition: all 0.3s ease;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .zita-btn:hover {
+    background-color: #e50914;
+    color: #ffffff;
+    box-shadow: 0 0 20px rgba(229, 9, 20, 0.4);
+  }
+}
+
+html, body, #root {
+  background-color: var(--color-zita-bg);
+  color: var(--color-zita-onbg);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Tab & general scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+}

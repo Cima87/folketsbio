@@ -1,0 +1,6 @@
+{
+  "name": "CineRadar",
+  "description": "Designated independent and art-house film industry journalism scanner and news provider tailored for Zita Folkets Bio in Stockholm.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
