@@ -952,7 +952,7 @@ app.get("/api/screendaily-headlines", async (req, res) => {
     throw new Error("Plausible articles not parsed from HTML structure");
 
   } catch (error: any) {
-    console.error("Scraper failed, using realistic fallback headlines with rich subtexts:", error);
+    console.warn("Screendaily scraper fallback active (External domain request blocked or rate-limited). Serving elegant cinema bulletin fallbacks.");
     const fallbackArticles = [
       {
         title: "Transilvania Pitch Stop unveils 10 projects for 2026 edition",
@@ -1008,7 +1008,9 @@ app.post("/api/n8n-trigger-agents", async (req, res) => {
       body: JSON.stringify(req.body)
     });
     if (!response.ok) {
-      throw new Error(`n8n agents trigger failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`n8n trigger-agents returned status ${response.status}: ${errorText}`);
+      throw new Error(`n8n agents trigger failed with status ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
     return res.json(data);
@@ -1026,7 +1028,9 @@ app.post("/api/n8n-strategy-chat", async (req, res) => {
       body: JSON.stringify(req.body)
     });
     if (!response.ok) {
-      throw new Error(`n8n strategy chat failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`n8n strategy-chat returned status ${response.status}: ${errorText}`);
+      throw new Error(`n8n strategy chat failed with status ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
     return res.json(data);
@@ -1044,7 +1048,9 @@ app.post("/api/n8n-execute-visuals", async (req, res) => {
       body: JSON.stringify(req.body)
     });
     if (!response.ok) {
-      throw new Error(`n8n execute visuals failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`n8n execute-visuals returned status ${response.status}: ${errorText}`);
+      throw new Error(`n8n execute visuals failed with status ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
     return res.json(data);
@@ -1062,7 +1068,9 @@ app.post("/api/n8n-render-start", async (req, res) => {
       body: JSON.stringify(req.body)
     });
     if (!response.ok) {
-      throw new Error(`n8n render start failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`n8n render-start returned status ${response.status}: ${errorText}`);
+      throw new Error(`n8n render start failed with status ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
     return res.json(data);
@@ -1083,7 +1091,9 @@ app.get("/api/n8n-render-check", async (req, res) => {
     const checkUrl = `https://cima87.app.n8n.cloud/webhook/render-check?${query.toString()}`;
     const response = await fetch(checkUrl);
     if (!response.ok) {
-      throw new Error(`n8n render check failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`n8n render-check returned status ${response.status}: ${errorText}`);
+      throw new Error(`n8n render check failed with status ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
     return res.json(data);

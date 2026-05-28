@@ -331,6 +331,10 @@ export default function App() {
 
   const handleSwitchTab = React.useCallback((tabNum: number) => {
     setActiveMainTab(tabNum);
+    if (tabNum === 3) {
+      setVisualsCampaign(null);
+      localStorage.removeItem('zita_visuals_campaign');
+    }
   }, []);
 
   const handleSaveMarketingData = React.useCallback((strategy: any, chat: any[]) => {
